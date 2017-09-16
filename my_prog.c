@@ -11,8 +11,11 @@
 
 // Global contructor that gets called even before main
 
+void checkpoint();
+
 void signal_handler() {
-    printf("%s\n", "signal caught");
+    checkpoint();
+    printf("%s\n", "checkpointing completed");
 }
 __attribute__((constructor))
 void myconstructor() {
@@ -98,7 +101,7 @@ struct MemoryRegion parseLine(char line[], int size) {
     return memregion;
 }
 
-int main(int argc, char  *argv[]) {
+void checkpoint() {
     FILE *ifp = NULL;
     FILE *ofp = NULL;
     ifp = fopen("/proc/self/maps", "r");
@@ -176,4 +179,8 @@ int main(int argc, char  *argv[]) {
         }
     }
     close(ifp2);
+}
+
+int main(int argc , char** argv) {
+	printf("%s\n", "I am in main");
 }
