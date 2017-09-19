@@ -12,10 +12,10 @@
 // Global contructor that gets called even before main
 
 void checkpoint();
+int flag = 0;
 
 void signal_handler() {
-    checkpoint();
-    printf("%s\n", "checkpointing completed");
+        checkpoint();
 }
 __attribute__((constructor))
 void myconstructor() {
@@ -32,25 +32,7 @@ struct MemoryRegion
 };
 /******************************************************************************/
 
-long totalSizeR = 0;
-long totalsizeRW = 0;
-
-void totalSizeOfReadOnly(struct MemoryRegion mem){
-
-    if (mem.isReadable && !mem.isWritable && !mem.isExecutable) {
-        totalSizeR = totalSizeR + (mem.endAddr - mem.startAddr);
-    }
-}
-
-void totalSizeOfReadWrite(struct MemoryRegion mem){
-
-    if (mem.isReadable && mem.isWritable) {
-        totalsizeRW = totalsizeRW + (mem.endAddr - mem.startAddr);
-    }
-}
-
 struct MemoryRegion parseLine(char line[], int size) {
-    //printf("%s\n", line);
     char startadd[256];
     char endadd[256];
     int isReadable = 0;
@@ -96,8 +78,6 @@ struct MemoryRegion parseLine(char line[], int size) {
     memregion.isReadable = isReadable;
     memregion.isExecutable = isExecutable;
     memregion.isWritable = isWritable;
-    totalSizeOfReadOnly(memregion);
-    totalSizeOfReadWrite(memregion);
     return memregion;
 }
 
@@ -111,6 +91,8 @@ void checkpoint() {
         exit(1);
     }
 
+    void * vsyscall_start_add;
+    vsyscall_start_add = (void *) strtoll("ffffffffff600000", NULL, 16);
     ucontext_t context;
     int context_result = 0;
     context_result = getcontext(&context);
@@ -118,14 +100,17 @@ void checkpoint() {
         printf("Error in getting context: %s\n", strerror(errno));
         exit(1);
     }
-    printf("%s\n", "Writing context info in to checkpointing image");
+
+    if (flag == 1) {
+        return;
+    } else {
+        flag++;
+    }
     fwrite(&context, sizeof(ucontext_t), 1, ofp);
-    //printf("%s %d\n", "size of getcontext struct", sizeof(ucontext_t));
     if (ifp != NULL) {
         char line[1024];
         int c;
         int i = 0;
-        printf("%s\n", "Writing memory maps to the checkpointing image");
         while((c = getc(ifp)) != EOF) {
             if(c != '\n' && i < 1024) {
                 line[i] = c;
@@ -133,11 +118,10 @@ void checkpoint() {
             } else {
                 line[i++] = '\n';
                 line[i] = '\0';
-                //printf("%s\n", line);
                 struct MemoryRegion memregion = parseLine(line, i);
-		        //printf("%ld %ld\n", memregion.startAddr, memregion.endAddr);
-
-                if(memregion.isReadable) {
+                // skipping regions that are not readable
+                // skipping vsyscall
+                if(memregion.isReadable && memregion.startAddr != vsyscall_start_add) {
                     fwrite(&memregion, sizeof(struct MemoryRegion), 1 , ofp);
                     fwrite(
                         memregion.startAddr, 1,
@@ -148,39 +132,10 @@ void checkpoint() {
         }
         fclose(ifp);
      	fclose(ofp);
+        printf("%s\n", "checkpint taken");
 
     } else {
         printf("%s\n", "cant open the file");
-    }
-    printf("%s %ld\n", "total readonly address", totalSizeR);
-    printf("%s %ld\n", "total read write address", totalsizeRW);
-
-    int ifp2;
-    ifp2 = open("myckpt", O_RDONLY);
-    if(ifp2 == -1) {
-        printf("%s\n", "Check pointing image not found");
         exit(1);
     }
-    else {
-            printf("%s\n", "Reading from checkpointing image");
-        int c = 0;
-    	struct MemoryRegion buffer;
-        ucontext_t context_1;
-
-        // reading first the getcontext of the process
-        c = read(ifp2, &context_1, sizeof(ucontext_t));
-        printf("%s %d\n", "Reading get context, size", c);
-        printf("%s\n", "reading the mem blocks now" );
-        while((c = read(ifp2, &buffer, sizeof(struct MemoryRegion))) != 0) {
-            //printf("%ld %ld\n", buffer.startAddr, buffer.endAddr);
-            char contentBuffer[buffer.endAddr - buffer.startAddr];
-            c = read(ifp2, &contentBuffer, sizeof(contentBuffer));
-            //fwrite(contentBuffer, sizeof(contentBuffer), 1 , stdout);
-        }
-    }
-    close(ifp2);
-}
-
-int main(int argc , char** argv) {
-	printf("%s\n", "I am in main");
 }
