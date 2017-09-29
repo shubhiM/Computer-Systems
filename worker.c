@@ -8,14 +8,18 @@ int main(int argc, char *argv[]) {
         printf("%s\n", "Arguments required: -x 2 -n 3");
         exit(1);
     }
-    int x =  argv[2][0] - '0';
-    int n =  argv[4][0] - '0';
+    char *x_s =  argv[2];
+    int x = atoi(x_s);
+    char *n_s = argv[4];
+    int n = atoi(n_s);
+
     float x_pow_n = 1;
     float n_factorial = 1;
     float result = 0.0;
-    if (n == 1) result = 1;
+    int a = n;
+    if (n == 0) result = 1;
 
-    else if(n == 2) result = x;
+    else if(n == 1) result = x;
 
     else {
 
@@ -28,7 +32,7 @@ int main(int argc, char *argv[]) {
         result = x_pow_n/n_factorial;
     }
     if (isatty(1)) {
-        printf("%d%s%d%s%f%s%f\n", x, "^", n , "/", n_factorial, " : ", result);
+        printf("%d%s%d%s%f%s%f\n", x, "^", a , "/", n_factorial, " : ", result);
     }
     else {
          printf("%f\n",result);
