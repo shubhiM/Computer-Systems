@@ -13,9 +13,9 @@ int main(int argc, char *argv[]) {
     char *n_s = argv[4];
     int n = atoi(n_s);
 
-    float x_pow_n = 1;
-    float n_factorial = 1;
-    float result = 0.0;
+    long double x_pow_n = 1;
+    long double n_factorial = 1;
+    long double result = 0.0;
     int a = n;
     if (n == 0) result = 1;
 
@@ -25,16 +25,16 @@ int main(int argc, char *argv[]) {
 
         while(n > 0)
         {
-            x_pow_n = x_pow_n * (float) x;
-            n_factorial = n_factorial * (float) n;
+            x_pow_n = x_pow_n * (long double) x;
+            n_factorial = n_factorial * (long double) n;
             n--;
         }
         result = x_pow_n/n_factorial;
     }
     if (isatty(1)) {
-        printf("%d%s%d%s%f%s%f\n", x, "^", a , "/", n_factorial, " : ", result);
+        printf("%d%s%d%s%Lf%s%Lf\n", x, "^", a , "/", n_factorial, " : ", result);
     }
     else {
-         printf("%f\n",result);
+         printf("%Lf\n",result);
     }
 }
