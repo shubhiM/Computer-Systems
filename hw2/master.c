@@ -5,9 +5,11 @@
 #include<stdlib.h>
 #include <sys/epoll.h>
 #include<sys/types.h>
+#include<argp.h>
 
 
 long double result = 0;
+char x[100];
 
 void createNewWorker(
     char file[], int worker_index, int term, int fds[][2]) {
@@ -27,7 +29,8 @@ void createNewWorker(
     if (child_pid == 0) {
         dup2(fds[worker_index][1], 1);
         char args_1[5] = "-x";
-        char args_2[5] = "2";
+        char args_2[100];
+        strcpy(args_2,  x);
         char args_3[5] = "-n";
         char args_4[100];
         sprintf(args_4, "%d", term);
@@ -48,7 +51,8 @@ int getHighestNumberFd(int fds[][2], int num_workers){
 }
 
 void waitForWorker(
-    char file[], int fds[][2], int i, int num_workers, int num_terms, int* termsFound) {
+    char file[],
+    int fds[][2], int i, int num_workers, int num_terms, int* termsFound) {
     fd_set rfds;
 
     while(1) {
@@ -75,7 +79,6 @@ void waitForWorker(
                 result+=strtold(buffer, & topstr);
                 *termsFound = *termsFound + 1;
                 close(fds[j][0]);
-
                 if(i <= num_terms) {
                     createNewWorker(file, j, i, fds);
                     i++;
@@ -107,7 +110,8 @@ int createNewWorkerForEpoll(char file[], int term) {
     if (child_pid == 0) {
         dup2(pipefds[1], 1);
         char args_1[5] = "-x";
-        char args_2[5] = "2";
+        char args_2[100];
+        strcpy(args_2,  x);
         char args_3[5] = "-n";
         char args_4[100];
         sprintf(args_4, "%d", term);
@@ -122,7 +126,8 @@ int createNewWorkerForEpoll(char file[], int term) {
 }
 
 void waitForWorkerEpoll(
-    int num_workers, int* epfd, struct epoll_event ev[], int num_terms, char file[], int i) {
+    int num_workers,
+    int* epfd, struct epoll_event ev[], int num_terms, char file[], int i) {
     int termsRead = 0;
     while(1) {
         int r = epoll_wait(*epfd, ev, num_workers, 10000);
@@ -174,14 +179,85 @@ void waitForWorkerEpoll(
 
 }
 
-int main(int argc, char const *argv[]) {
-    int num_workers = 4;
-    //TODO: add extra 1 in numterm to the num terms passed by the user
-    int num_terms = 13;
-    char file[100] = "./worker";
+
+//*****************************************************************
+// argument parsing
+
+// implementing argp library for argument parsing
+const char *argp_program_version = "argp-ex3 1.0";
+const char *argp_program_bug_address = "<bug-gnu-utils@gnu.org>";
+
+
+struct arguments {
+    int verbose;
+    char *worker_path, *num_of_workers, *mechanism_for_wait, *x, *n;
+};
+
+static struct argp_option options[] =
+{
+  {"verbose", 'v', 0, 0, "Produce verbose output"},
+  {"worker_path",   'p', "STRING1", 0, "path of the worker file"},
+  {"num_workers",   'w', "STRING2", 0, "number of workers to spawn"},
+  {"wait_mechanism",  'm', "STRING3", 0, "weight mechanism"},
+  {"x_value",  'x', "STRING4", 0, "value of x"},
+  {"number_of_terms",  'n', "STRING5", 0, "value of n"},
+  {0}
+};
+
+static error_t parse_opt (int key, char *arg, struct argp_state *state)
+{
+  struct arguments *arguments = state->input;
+
+  switch (key)
+    {
+    case 'v':
+      arguments->verbose = 1;
+      break;
+    case 'p':
+      arguments->worker_path = arg;
+      break;
+    case 'w':
+      arguments->num_of_workers = arg;
+      break;
+    case 'm':
+      arguments->mechanism_for_wait = arg;
+      break;
+    case 'x':
+        arguments->x = arg;
+        break;
+    case 'n':
+          arguments->n= arg;
+          break;
+    default:
+      return ARGP_ERR_UNKNOWN;
+    }
+  return 0;
+}
+static char args_doc[] = "";
+static char doc[] = "Master program";
+static struct argp argp = {options, parse_opt, args_doc, doc};
+
+
+int main(int argc, char **argv) {
+    struct arguments arguments;
+    // default argument values
+    arguments.worker_path = "";
+    arguments.num_of_workers = "";
+    arguments.mechanism_for_wait = "";
+    arguments.x = "";
+    arguments.n = "";
+    arguments.verbose = 0;
+    argp_parse(&argp, argc, argv, 0, 0, &arguments);
+    int num_workers = atoi(arguments.num_of_workers);
+    // adding extra one as terms are calculated from zero
+    int num_terms = atoi(arguments.n) + 1;
+    char file[100];
+    strcpy(file, arguments.worker_path);
+    int mechanism = (
+        strcmp(arguments.mechanism_for_wait, "select") == 0) ? 0 : 1;
+    strcpy(x, arguments.x);
     int i = 0;
     int termsFound = 0;
-    int mechanism = 1;
     if(num_workers > num_terms){
         num_workers = num_terms;
     }

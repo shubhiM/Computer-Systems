@@ -1,0 +1,24 @@
+MAKEFILE commands:
+
+Steps to run the master worker project.
+1. make check - executes both make clean and make build sequentially
+
+
+run the project using the following command
+
+For master (you can pass the arguments in arbitrary order)
+./master --worker_path ./worker --num_workers 5 --wait_mechanism MECHANISM
+-x 2 -n 12
+
+Here MECHANISM can hold select/epoll (case sensitive)
+
+output of the master process would be "result: <total sum>"
+
+For worker (arguments can be passed in any order)
+./worker -x 2 -n 3
+
+
+LIMITATION:
+The program has been stress tested for 1000 terms maximum, after that there is
+OS limit of opened file descriptors (1024) and program halts giving error as
+too many open file descriptors.

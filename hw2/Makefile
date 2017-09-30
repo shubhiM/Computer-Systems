@@ -11,7 +11,6 @@ worker: worker.c
 master: master.c
 	gcc -g -o master master.c
 
-check: clean worker master
+build: worker master
 
-res: master
-	./master
+check: clean build
