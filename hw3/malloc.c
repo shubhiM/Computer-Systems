@@ -6,138 +6,155 @@
 #include <assert.h>
 #define PAGESIZE sysconf(_SC_PAGESIZE)
 
-// Each memory block in a page is
-// represented using this header
-struct MemBlockHeader {
-        size_t size;
-        int isFree;
-        struct MemBlockHeader *left;
-        struct MemBlockHeader *right;
+struct MemoryNodeHeader {
+        size_t blockSize;
+        struct MemoryNodeHeader *parent;
+        struct MemoryNodeHeader *leftChild;
+        struct MemoryNodeHeader *rightChild;
+        int isNotFree;
+        int visited;
 } *root;
 
 
-struct MemBlockHeader* minRoot = NULL;
-void  traverse(
-        struct MemBlockHeader* root, size_t size) {
-        if(minRoot) ;
-        else {
-                if (root && root->isFree && size == root->size) {
-                        minRoot = root;
-                }
-                else if(root && root->left && root->left->size < size) {
-                        // current root is the minRoot
-                        if (root->left->isFree) {
-                                minRoot = root;
-                        }
-                        else if (root->right && root->right->isFree) {
-                                minRoot = root;
-                        }
-                }
-
-                else if(root && root->isFree && size < root->size) {
-                        traverse(root->left, size);
-                        traverse(root->right, size);
-                }
-        }
-}
-
 void myprint(void* val){
         char buf[1024];
-        snprintf(buf, 1024, "%p printed\n",val);
+        snprintf(buf, 1024, "%p printed\n",(int *) val);
         write(STDOUT_FILENO, buf, strlen(buf) + 1);
 }
 
+struct MemoryNodeHeader* minNode = NULL;
 
-void *allocatedAddress = NULL;
-
-int sizeExtendsPage(size_t size) {
-        return (size >= PAGESIZE);
-}
-void *allocatedForPageSize(size_t size) {
-        if (size == PAGESIZE) {
-                allocatedAddress = sbrk(0);
+size_t getPageSize(size_t requiredSize) {
+        // Total size that will be required will also include space for header
+        size_t requiredSpace = requiredSize + sizeof(struct MemoryNodeHeader);
+        // some of the page size will get occupied by the header
+        size_t pageSize = PAGESIZE;
+        size_t dataSegSize = pageSize - sizeof(struct MemoryNodeHeader);
+        while(dataSegSize < requiredSpace) {
+                pageSize = pageSize * 2;
+                dataSegSize = pageSize - sizeof(struct MemoryNodeHeader);
         }
-        else if(size > PAGESIZE) {
-                allocatedAddress = sbrk(0);
-                int numPages;
-                if (size%PAGESIZE == 0) {
-                        numPages = size/PAGESIZE;
-                } else {
-                        numPages = size/PAGESIZE + size%PAGESIZE;
-                }
-                sbrk(numPages*PAGESIZE);
-        }
-        return allocatedAddress;
-}
-int power(int a, int p) {
-        int result = 1;
-        for (int i=1; i<=p; i++) {
-                result = result * a;
-        }
-        return result;
+        return pageSize;
 }
 
-void splitIntoBuddies(struct MemBlockHeader *node, int pageSize) {
-        struct MemBlockHeader *left = node + 1;
-        size_t dataSize = pageSize - sizeof(struct MemBlockHeader);
-        left->size = dataSize;
-        left->isFree = 1;
-        left->left = NULL;
-        left->right = NULL;
-        node->left = left;
-        //void *addr = (void *)node + pageSize/sizeof(addr) + 1;
-        void *addr = (void *)node + pageSize;
-        struct MemBlockHeader *right = addr;
-        right->size = dataSize;
-        right->isFree = 1;
-        right->left = NULL;
-        right->right = NULL;
-        node->right = right;
+void splitHelper(struct MemoryNodeHeader* node) {
+        size_t newSize = node->blockSize/2;
+        node->leftChild = node + 1;
+        node->leftChild->parent = node;
+        node->leftChild->blockSize = newSize;
+        node->leftChild->isNotFree = 0;
+        node->leftChild->visited = 0;
+        node->rightChild = (void *) node + newSize;
+        node->rightChild->parent = node;
+        node->rightChild->blockSize = newSize;
+        node->rightChild->isNotFree = 0;
+        node->rightChild->visited = 0;
+        node->isNotFree = 1;
+        node->visited = 0;
 }
 
 
-struct MemBlockHeader* largestBuddy(size_t size) {
-        root = sbrk(0);
-        sbrk(PAGESIZE);
-        size_t dataSize = PAGESIZE - sizeof(struct MemBlockHeader);
-        root->size = dataSize;
-        root->isFree = 1;
-        int initalSize = PAGESIZE;
-        int powOftwo = 1;
-        initalSize = PAGESIZE/power(2, powOftwo);
-        struct MemBlockHeader *currentNode = root;
-        while(size < initalSize) {
-                if(size > initalSize/power(2, powOftwo+1)) {
-                        break;
-                }
-                splitIntoBuddies(currentNode, initalSize);
-                currentNode = currentNode->left;
-                //myprint(currentNode);
-                initalSize = PAGESIZE/power(2, ++powOftwo);
-        }
-        // Node is occupied
-        currentNode->isFree = 0;
-        // return the address of the data segment of the largestBuddy
-        return currentNode + 1;
+int canBeSplit(size_t blockSize, int requiredSize) {
+        size_t newSize = blockSize/2;
+        int leftNodeSize = newSize - 2*sizeof(struct MemoryNodeHeader);
+        int rightNodeSize = newSize - sizeof(struct MemoryNodeHeader);
+        return (leftNodeSize > 0 && rightNodeSize > 0) && (
+                       leftNodeSize >= requiredSize || rightNodeSize >= requiredSize);
 }
 
-void *allocateMemory(size_t size) {
-        if (root && root->isFree) {
-                // root tree exists and there is space in the root tree
-                myprint(1);
-                minRoot = NULL;
-                traverse(root, size);
-                myprint(minRoot);
-                return minRoot;
+void split(struct MemoryNodeHeader* node, size_t requiredSize) {
+        // we do not have to split if we find the min node already
+        if(!minNode && canBeSplit(node->blockSize, requiredSize)) {
+                splitHelper(node);
+                split(node->leftChild, requiredSize);
+                split(node->rightChild, requiredSize);
+
         } else {
-                // root tree does not exists
-                // create a new one
-                //TODO: if root exists but its full then add this new tree
-                // to the linked list of memory trees
-                myprint(3);
-                return largestBuddy(size);
+                if(!minNode) {
+                        minNode = node;
+                        minNode->isNotFree = 1;
+                }
         }
 }
-void *malloc(size_t size) {
-        return allocateMemory(size);
+
+struct MemoryNodeHeader* freeNode = NULL;
+// Function to get the free node from the Memory Tree
+void getFreeNode(struct MemoryNodeHeader* node, size_t requiredSize) {
+        if(!freeNode && canBeSplit(node->blockSize, requiredSize)) {
+                getFreeNode(node->leftChild, requiredSize);
+                getFreeNode(node->rightChild, requiredSize);
+
+        } else {
+                if(!freeNode) {
+                        if(!node->isNotFree) {
+                                freeNode = node;
+                                freeNode->isNotFree = 1;
+                        }
+                }
+        }
+}
+
+void createOrExtendMemoryTree(size_t requiredSize, int choice) {
+        //struct MemoryNodeHeader* allocatedNode = NULL;
+        if(choice == 1) {
+                // create memory
+                root = sbrk(0);
+                // page size required to fulfill the memory request
+                size_t pageSize = getPageSize(requiredSize);
+                sbrk(pageSize);
+                root->blockSize = pageSize;
+                root->isNotFree = 1;
+                root->visited = 0;
+                root->parent = NULL;
+                split(root, requiredSize);
+                // myprint(minNode->parent);
+                // myprint(minNode);
+                // myprint(minNode + 1);
+                //return resultNode + 1;
+        }
+        else if(choice == 2) {
+                // extend Memory
+        }
+        else {
+                // exit with error saying invalid choice
+        }
+        //return NULL;
+}
+
+struct MemoryNodeHeader* dfs() {
+        // returns the first free node by applying dfs from left to right
+        return NULL;
+}
+
+void* allocateMemory(size_t requiredSize) {
+        // set minNode to null
+        // set freeNode to null
+        minNode = NULL;
+        freeNode = NULL;
+
+        if(!root) {
+                createOrExtendMemoryTree(requiredSize, 1);
+                return minNode + 1;
+        }
+        else if(root->blockSize <= requiredSize) {
+                //TODO: calculate exact data size to make it more
+                // accurate
+                // the root itself is not sufficient to hold the space
+                // so we will have to extend the memory Tree
+                createOrExtendMemoryTree(requiredSize, 2);
+                return minNode + 1;
+        } else {
+                getFreeNode(root, requiredSize);
+                if(freeNode) {
+                        split(freeNode, requiredSize);
+                        return minNode + 1;
+                } else {
+                        createOrExtendMemoryTree(requiredSize, 2);
+                        return minNode + 1;
+                }
+        }
+};
+
+void * malloc(size_t requiredSize) {
+        return allocateMemory(requiredSize);
 }
