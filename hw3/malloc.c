@@ -12,15 +12,11 @@ struct MemoryNodeHeader {
         struct MemoryNodeHeader *leftChild;
         struct MemoryNodeHeader *rightChild;
         int isNotFree;
-        int visited;
-} *root;
+        // used as padding bytes for data allignment
+        int paddingBytes;
+        struct MemoryNodeHeader* nextRoot;
+} *head;
 
-
-void myprint(void* val){
-        char buf[1024];
-        snprintf(buf, 1024, "%p printed\n",(int *) val);
-        write(STDOUT_FILENO, buf, strlen(buf) + 1);
-}
 
 struct MemoryNodeHeader* minNode = NULL;
 
@@ -43,23 +39,26 @@ void splitHelper(struct MemoryNodeHeader* node) {
         node->leftChild->parent = node;
         node->leftChild->blockSize = newSize;
         node->leftChild->isNotFree = 0;
-        node->leftChild->visited = 0;
+        node->leftChild->paddingBytes = 0;
         node->rightChild = (void *) node + newSize;
         node->rightChild->parent = node;
         node->rightChild->blockSize = newSize;
         node->rightChild->isNotFree = 0;
-        node->rightChild->visited = 0;
+        node->rightChild->paddingBytes = 0;
         node->isNotFree = 1;
-        node->visited = 0;
+        node->paddingBytes = 0;
 }
 
-
-int canBeSplit(struct MemoryNodeHeader* node, int requiredSize) {
+int canGoDown(struct MemoryNodeHeader* node, int requiredSize) {
         size_t newSize = (node->blockSize)/2;
         int leftNodeSize = newSize - 2*sizeof(struct MemoryNodeHeader);
         int rightNodeSize = newSize - sizeof(struct MemoryNodeHeader);
-        return (!node->isNotFree && leftNodeSize > 0 && rightNodeSize > 0) && (
-                       leftNodeSize >= requiredSize || rightNodeSize >= requiredSize);
+        return (leftNodeSize > 0 && rightNodeSize > 0) &&
+               (leftNodeSize >= requiredSize || rightNodeSize >= requiredSize);
+}
+
+int canBeSplit(struct MemoryNodeHeader* node, int requiredSize) {
+        return (!node->isNotFree && canGoDown(node, requiredSize));
 }
 
 void split(struct MemoryNodeHeader* node, size_t requiredSize) {
@@ -71,6 +70,8 @@ void split(struct MemoryNodeHeader* node, size_t requiredSize) {
 
         } else {
                 if(!minNode) {
+                        //TODO: check size before assigning the minNode
+                        // it can be either left or right child
                         minNode = node;
                         minNode->isNotFree = 1;
                 }
@@ -79,8 +80,11 @@ void split(struct MemoryNodeHeader* node, size_t requiredSize) {
 
 struct MemoryNodeHeader* freeNode = NULL;
 // Function to get the free node from the Memory Tree
+// The free node would be the most suitable free node that
+// can fulfill the request
 void getFreeNode(struct MemoryNodeHeader* node, size_t requiredSize) {
-        if(!freeNode && node->leftChild && node->rightChild) {
+        if(!freeNode && node->leftChild && node->rightChild &&
+           canGoDown(node, requiredSize)) {
                 getFreeNode(node->leftChild, requiredSize);
                 getFreeNode(node->rightChild, requiredSize);
 
@@ -93,62 +97,50 @@ void getFreeNode(struct MemoryNodeHeader* node, size_t requiredSize) {
         }
 }
 
-void createOrExtendMemoryTree(size_t requiredSize, int choice) {
-        //struct MemoryNodeHeader* allocatedNode = NULL;
-        if(choice == 1) {
-                // create memory
-                root = sbrk(0);
-                // page size required to fulfill the memory request
-                size_t pageSize = getPageSize(requiredSize);
-                sbrk(pageSize);
-                root->blockSize = pageSize;
-                root->isNotFree = 0;
-                root->visited = 0;
-                root->parent = NULL;
-                split(root, requiredSize);
-        }
-        else if(choice == 2) {
-                // extend Memory
-        }
-        else {
-                // exit with error saying invalid choice
-        }
-        //return NULL;
-}
+void createMemoryTree(size_t requiredSize) {
+        struct MemoryNodeHeader* root = sbrk(0);
+        // page size required to fulfill the memory request
+        size_t pageSize = getPageSize(requiredSize);
 
-struct MemoryNodeHeader* dfs() {
-        // returns the first free node by applying dfs from left to right
-        return NULL;
+        sbrk(pageSize);
+
+        root->blockSize = pageSize;
+        root->isNotFree = 0;
+        root->paddingBytes = 0;
+        root->parent = NULL;
+        root->nextRoot = NULL;
+        // head is pointing at the root
+        if(head) {
+                head->nextRoot = root;
+        }else{
+                head = root;
+        }
+        split(root, requiredSize);
 }
 
 void* allocateMemory(size_t requiredSize) {
-        // set minNode to null
-        // set freeNode to null
         minNode = NULL;
         freeNode = NULL;
-
-        if(!root) {
-                createOrExtendMemoryTree(requiredSize, 1);
-                return minNode + 1;
-        }
-        else if(root->blockSize <= requiredSize) {
-                //TODO: calculate exact data size to make it more
-                // accurate
-                // the root itself is not sufficient to hold the space
-                // so we will have to extend the memory Tree
-                createOrExtendMemoryTree(requiredSize, 2);
-                return minNode + 1;
-        } else {
-                getFreeNode(root, requiredSize);
-                if(freeNode) {
-                        split(freeNode, requiredSize);
-                        return minNode + 1;
-                } else {
-                        createOrExtendMemoryTree(requiredSize, 2);
-                        return minNode + 1;
+        if(head) {
+                struct MemoryNodeHeader* temp = head;
+                while(temp) {
+                        // check in the temp mem tree
+                        getFreeNode(temp, requiredSize);
+                        if(freeNode) {
+                                split(freeNode, requiredSize);
+                                break;
+                        }
+                        temp = temp->nextRoot;
+                }
+                if(!minNode) {
+                        createMemoryTree(requiredSize);
                 }
         }
-};
+        else{
+                createMemoryTree(requiredSize);
+        }
+        return minNode + 1;
+}
 
 void * malloc(size_t requiredSize) {
         return allocateMemory(requiredSize);
