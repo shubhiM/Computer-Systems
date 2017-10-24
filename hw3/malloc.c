@@ -54,17 +54,17 @@ void splitHelper(struct MemoryNodeHeader* node) {
 }
 
 
-int canBeSplit(size_t blockSize, int requiredSize) {
-        size_t newSize = blockSize/2;
+int canBeSplit(struct MemoryNodeHeader* node, int requiredSize) {
+        size_t newSize = (node->blockSize)/2;
         int leftNodeSize = newSize - 2*sizeof(struct MemoryNodeHeader);
         int rightNodeSize = newSize - sizeof(struct MemoryNodeHeader);
-        return (leftNodeSize > 0 && rightNodeSize > 0) && (
+        return (!node->isNotFree && leftNodeSize > 0 && rightNodeSize > 0) && (
                        leftNodeSize >= requiredSize || rightNodeSize >= requiredSize);
 }
 
 void split(struct MemoryNodeHeader* node, size_t requiredSize) {
         // we do not have to split if we find the min node already
-        if(!minNode && canBeSplit(node->blockSize, requiredSize)) {
+        if(!minNode && canBeSplit(node, requiredSize)) {
                 splitHelper(node);
                 split(node->leftChild, requiredSize);
                 split(node->rightChild, requiredSize);
@@ -80,7 +80,7 @@ void split(struct MemoryNodeHeader* node, size_t requiredSize) {
 struct MemoryNodeHeader* freeNode = NULL;
 // Function to get the free node from the Memory Tree
 void getFreeNode(struct MemoryNodeHeader* node, size_t requiredSize) {
-        if(!freeNode && canBeSplit(node->blockSize, requiredSize)) {
+        if(!freeNode && node->leftChild && node->rightChild) {
                 getFreeNode(node->leftChild, requiredSize);
                 getFreeNode(node->rightChild, requiredSize);
 
@@ -88,7 +88,6 @@ void getFreeNode(struct MemoryNodeHeader* node, size_t requiredSize) {
                 if(!freeNode) {
                         if(!node->isNotFree) {
                                 freeNode = node;
-                                freeNode->isNotFree = 1;
                         }
                 }
         }
@@ -103,14 +102,10 @@ void createOrExtendMemoryTree(size_t requiredSize, int choice) {
                 size_t pageSize = getPageSize(requiredSize);
                 sbrk(pageSize);
                 root->blockSize = pageSize;
-                root->isNotFree = 1;
+                root->isNotFree = 0;
                 root->visited = 0;
                 root->parent = NULL;
                 split(root, requiredSize);
-                // myprint(minNode->parent);
-                // myprint(minNode);
-                // myprint(minNode + 1);
-                //return resultNode + 1;
         }
         else if(choice == 2) {
                 // extend Memory
