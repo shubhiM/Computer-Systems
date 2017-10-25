@@ -19,6 +19,11 @@ struct MemoryNodeHeader {
 
 
 struct MemoryNodeHeader* minNode = NULL;
+struct MemoryNodeHeader* freeNode = NULL;
+
+
+/******************************************************************************/
+// HELPER FUNCTIONS
 
 size_t getPageSize(size_t requiredSize) {
         // Total size that will be required will also include space for header
@@ -31,6 +36,34 @@ size_t getPageSize(size_t requiredSize) {
                 dataSegSize = pageSize - sizeof(struct MemoryNodeHeader);
         }
         return pageSize;
+}
+
+int getLeftNodeSize(size_t nodeSize){
+        return nodeSize - 2*sizeof(struct MemoryNodeHeader);
+}
+
+int getRightNodeSize(size_t nodeSize){
+        return nodeSize - sizeof(struct MemoryNodeHeader);
+}
+
+int canGoDown(struct MemoryNodeHeader* node, int requiredSize) {
+        size_t newSize = (node->blockSize)/2;
+        int leftNodeSize = getLeftNodeSize(newSize);
+        int rightNodeSize = getRightNodeSize(newSize);
+        return (leftNodeSize > 0 && rightNodeSize > 0) &&
+               (leftNodeSize >= requiredSize || rightNodeSize >= requiredSize);
+}
+
+int canBeSplit(struct MemoryNodeHeader* node, int requiredSize) {
+        return (!node->isNotFree && canGoDown(node, requiredSize));
+}
+
+int getNodeSize(struct MemoryNodeHeader* node){
+        if(node->parent->leftChild == node) {
+                return getLeftNodeSize(node->blockSize);
+        }else{
+                return getRightNodeSize(node->blockSize);
+        }
 }
 
 void splitHelper(struct MemoryNodeHeader* node) {
@@ -49,18 +82,6 @@ void splitHelper(struct MemoryNodeHeader* node) {
         node->paddingBytes = 0;
 }
 
-int canGoDown(struct MemoryNodeHeader* node, int requiredSize) {
-        size_t newSize = (node->blockSize)/2;
-        int leftNodeSize = newSize - 2*sizeof(struct MemoryNodeHeader);
-        int rightNodeSize = newSize - sizeof(struct MemoryNodeHeader);
-        return (leftNodeSize > 0 && rightNodeSize > 0) &&
-               (leftNodeSize >= requiredSize || rightNodeSize >= requiredSize);
-}
-
-int canBeSplit(struct MemoryNodeHeader* node, int requiredSize) {
-        return (!node->isNotFree && canGoDown(node, requiredSize));
-}
-
 void split(struct MemoryNodeHeader* node, size_t requiredSize) {
         // we do not have to split if we find the min node already
         if(!minNode && canBeSplit(node, requiredSize)) {
@@ -69,16 +90,14 @@ void split(struct MemoryNodeHeader* node, size_t requiredSize) {
                 split(node->rightChild, requiredSize);
 
         } else {
-                if(!minNode) {
-                        //TODO: check size before assigning the minNode
-                        // it can be either left or right child
+                if(getNodeSize(node) >= requiredSize && !minNode) {
                         minNode = node;
                         minNode->isNotFree = 1;
+
                 }
         }
 }
 
-struct MemoryNodeHeader* freeNode = NULL;
 // Function to get the free node from the Memory Tree
 // The free node would be the most suitable free node that
 // can fulfill the request
@@ -89,10 +108,9 @@ void getFreeNode(struct MemoryNodeHeader* node, size_t requiredSize) {
                 getFreeNode(node->rightChild, requiredSize);
 
         } else {
-                if(!freeNode) {
-                        if(!node->isNotFree) {
-                                freeNode = node;
-                        }
+                if((getNodeSize(node) >= requiredSize) &&
+                   !node->isNotFree && !freeNode) {
+                        freeNode = node;
                 }
         }
 }
@@ -142,6 +160,76 @@ void* allocateMemory(size_t requiredSize) {
         return minNode + 1;
 }
 
-void * malloc(size_t requiredSize) {
+
+void* malloc(size_t requiredSize) {
         return allocateMemory(requiredSize);
+}
+/*****************************************************************************/
+// Implementing free
+
+int isLeaf(struct MemoryNodeHeader* node){
+        return (!node->leftChild && !node->rightChild);
+}
+
+int canBeMerged(struct MemoryNodeHeader* node){
+        return ((node->leftChild && !node->leftChild->isNotFree) &&
+                (node->rightChild && !node->rightChild->isNotFree));
+}
+void freeHelper(struct MemoryNodeHeader* node){
+        if(isLeaf(node) || canBeMerged(node)) {
+                node->isNotFree = 0;
+                if(node->leftChild) {
+                        node->leftChild = NULL;
+                }
+                if(node->rightChild) {
+                        node->rightChild = NULL;
+                }
+                freeHelper(node->parent);
+        }
+}
+
+void free(void* ptr) {
+        struct MemoryNodeHeader* node = (struct MemoryNodeHeader*) ptr - 1;
+        freeHelper(node);
+}
+
+
+/****************************************************************************/
+// Implementing calloc
+
+void* calloc(size_t nmem, size_t size){
+        size_t totalSize = nmem * size;
+        void* ptr = malloc(totalSize);
+        return memset(ptr, 0, totalSize);
+}
+
+/*****************************************************************************/
+// Implementing Realloc
+
+void* realloc(void* ptr, size_t size){
+        if(!ptr) {
+                return malloc(size);
+        }
+        else if(ptr && size == 0) {
+                free(ptr);
+                return NULL;
+        }
+        else {
+                // calculates the size of the data that needs to be copied to
+                // new location for the required size
+                // copies data from old to new location
+                // frees the old location
+                struct MemoryNodeHeader* node = (struct MemoryNodeHeader*)ptr - 1;
+                size_t dataSize = 0;
+                if(node->parent->leftChild == node) {
+                        // this is left child
+                        dataSize = node->blockSize - 2*sizeof(struct MemoryNodeHeader);
+                }else{
+                        // this is right child
+                        dataSize = node->blockSize - sizeof(struct MemoryNodeHeader);
+                }
+                void *newPtr = memcpy(allocateMemory(size), ptr, dataSize);
+                free(ptr);
+                return newPtr;
+        }
 }
