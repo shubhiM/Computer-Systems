@@ -1,0 +1,34 @@
+RAM Prediction
+
+RAM predictor has been implemented by using the following approach.
+
+Data structure:
+Each memory block is represented by struct addressList. In Each block we save
+the address of the next allocated block and the time taken to write data in the
+block through memset. Head points to the first block in the addressList.
+
+Steps in each iteration
+    1. we allocate a memory block of 4MB which is added to the linked list of
+    allocated Addresses.
+    2. we re-write all the allocated addresses from the list of allocated addresses
+    including the newly allocated address and count the number of blocks that
+    took double time to write as compared to the previous write time.
+    The assumption is that such blocks are good candidates for page faults. This
+    count essentially represents number of page faults in each iteration.
+    3. We keep a global hash Map, which essentially captures the frequency
+    distribution of the number of page faults. The index in array represents the
+    number of page faults occurred and value represents the frequency of it
+    so far across all iterations. In each iteration we update this hash Map.
+    4. We keep a sliding window of size 20 to keep track of the number of page
+    faults happened in last 20 iterations. Calculate the average number of page
+    faults happening in the last 20 iterations
+    5. check if the average number of page faults > 20 times the most frequently
+    occurring page fault. This means that now the number of page faults is 20
+    times larger than the commonly observed page fault value. And it gives us good
+    estimate of possibility of thrashing. Program breaks after this point and the
+    memory allocated so far is the predicted RAM Size.
+
+
+Observations:
+The program was run on a system with 4GB ram (ubuntu) and it consistently
+predicted RAM size 3.8 GB Approx.

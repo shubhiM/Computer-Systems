@@ -1,12 +1,12 @@
 default: all
 
-all: clean ramsize.o ramsize
-	./ramsize
+all: clean predictRam.o predictRam
+	./predictRam
 
 clean:
-	rm -rf ramsize ramsize.o
-ramsize.o: ramsize.c
-	gcc -g -c -Wall -Werror -fpic  -o ramsize.o ramsize.c
+	rm -rf predictRam predictRam.o
+predictRam.o: predictRam.c
+	gcc -g -c -Wall -Werror -fpic  -o predictRam.o predictRam.c
 
-ramsize: ramsize.o
-	gcc -g -o ramsize ramsize.o
+predictRam: predictRam.o
+	gcc -g -o predictRam predictRam.o
