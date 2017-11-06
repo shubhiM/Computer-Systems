@@ -6,9 +6,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <sched.h>
-
 #define PAGESIZE sysconf(_SC_PAGESIZE)
-
 int a[1048576];
 
 void initialize(int a[], int size){
@@ -16,8 +14,32 @@ void initialize(int a[], int size){
                 a[i] = 0;
         }
 }
-// Array is complely in memory
-void experiment(int trials, int pages){
+
+double getTimeToAccessIthElement(int index){
+        struct timespec start, end;
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+        a[index]+=1;
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
+        unsigned long start_time = 1000000000*start.tv_sec + start.tv_nsec;
+        unsigned long end_time = 1000000000*end.tv_sec + end.tv_nsec;
+        printf("Access time for %d element of array %lf\n",
+               index, (double)(end_time - start_time));
+        return (double) (end_time - start_time);
+}
+
+void specCacheLineSize(){
+        for(int j=2; j<=10000; j=j*2) {
+                getTimeToAccessIthElement(j);
+                if(j == 1024 || j == 2048 || j == 4096 || j==8192) {
+                        for(int k=1; k<=5; k++) {
+                                getTimeToAccessIthElement(j+k);
+                        }
+                }
+        }
+}
+
+
+void specCacheSize(int trials, int pages){
         struct timespec start, end;
         int jump = PAGESIZE/sizeof(int);
         double total = 0;
@@ -31,6 +53,7 @@ void experiment(int trials, int pages){
                         a[s]+=1;
                         denom += 1.0;
                 }
+
         }
         clock_gettime(CLOCK_REALTIME, &end);
         unsigned long start_time = 1000000000*start.tv_sec + start.tv_nsec;
@@ -41,9 +64,15 @@ void experiment(int trials, int pages){
                total/(denom), pages, trials);
 }
 
-int main(int argc, char const *argv[]) {
-        /* code */
 
+void runCacheSizeSpec(){
+        initialize(a, 1048576);
+        for(int i=2; i<=1024; ) {
+                specCacheSize(100000000, i);
+                i = i*2;
+        }
+}
+int main(int argc, char const *argv[]) {
         cpu_set_t my_set;
         CPU_ZERO(&my_set);
         CPU_SET(0, &my_set);
@@ -51,12 +80,7 @@ int main(int argc, char const *argv[]) {
                 printf("CPU affinity could not be set");
                 exit(1);
         }
+        runCacheSizeSpec();
+        specCacheLineSize();
 
-        //initialize the global array
-        initialize(a, 1048576);
-
-        for(int i=2; i<=1024; ) {
-                experiment(100000000, i);
-                i = i*2;
-        }
 }
