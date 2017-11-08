@@ -42,9 +42,21 @@ void testScenarioMalloc(){
         allocation(2000, 'e');
 }
 
+void testScenarioCalloc(unsigned int size){
+        void *mem_1 = calloc(size, 1);
+        printf("%p\n", mem_1);
+        int count = 0;
+        while(count < size) {
+                printf("%d\n", *((int *)mem_1));
+                count++;
+                mem_1++;
+        }
+}
+
 int main(int argc, char **argv)
 {
         testScenarioMalloc();
         testScenarioFree();
+        testScenarioCalloc(16);
         return 0;
 }
