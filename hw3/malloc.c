@@ -229,15 +229,7 @@ void* realloc(void* ptr, size_t size){
                 // copies data from old to new location
                 // frees the old location
                 struct MemoryNodeHeader* node = (struct MemoryNodeHeader*)ptr - 1;
-                size_t dataSize = 0;
-                if(node->parent->leftChild == node) {
-                        // this is left child
-                        dataSize = node->blockSize - 2*sizeof(struct MemoryNodeHeader);
-                }else{
-                        // this is right child
-                        dataSize = node->blockSize - sizeof(struct MemoryNodeHeader);
-                }
-                void *newPtr = memcpy(allocateMemory(size), ptr, dataSize);
+                void *newPtr = memcpy(allocateMemory(size), ptr, node->dataSize);
                 free(ptr);
                 return newPtr;
         }
