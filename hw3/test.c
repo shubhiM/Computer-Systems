@@ -1,35 +1,39 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+struct MemoryNodeHeader {
+        unsigned int blockSize;
+        unsigned int dataSize;
+        struct MemoryNodeHeader *parent;
+        struct MemoryNodeHeader *leftChild;
+        struct MemoryNodeHeader *rightChild;
+        unsigned int isNotFree;
+        // used as padding bytes for data allignment
+        unsigned int paddingBytes;
+        struct MemoryNodeHeader* nextRoot;
+};
+
+void allocation(unsigned int size, char c){
+        void *mem_1 = malloc(size);
+        struct MemoryNodeHeader* node_1 = (struct MemoryNodeHeader* ) mem_1 - 1;
+        assert(node_1->dataSize >= size);
+        assert(memset(mem_1, c, size-1) != NULL);
+        memset(mem_1 + size-1, '\0', 1);
+        printf("%s\n", mem_1);
+}
+void testScenarioMalloc(){
+        // Testing Heap Consistency for consequetive mallocs
+        allocation(16, 'a');
+        allocation(16, 'b');
+        allocation(16, 'c');
+        allocation(2000, 'd');
+        allocation(2000, 'e');
+}
 
 int main(int argc, char **argv)
 {
-        size_t size = 12; //128
-        void *mem = malloc(size);
-        //printf("Successfully malloc'd %zu bytes at addr %p\n", size, mem);
-        assert(mem != NULL);
-        // free(mem);
-        // printf("Successfully free'd %zu bytes from addr %p\n", size, mem);
-        size_t size_2 = 16; //128
-        void *mem_2 = malloc(size_2);
-        //printf("Successfully malloc'd %zu bytes at addr %p\n", size_2, mem_2);
-
-        size_t size_3 = 16; // 256
-        void *mem_3 = malloc(size_3);
-
-        size_t size_4 = 2000; // 256
-        void *mem_4 = malloc(size_4);
-
-        // new root
-        size_t size_5 = 2000; // 256
-        void *mem_5 = malloc(size_5);
-
-        // previous tree
-        size_t size_7 = 900; // 256
-        void *mem_7 = malloc(size_7);
-        // new tree
-        size_t size_8 = 900; // 256
-        void *mem_8 = malloc(size_8);
-
+        testScenarioMalloc();
         return 0;
 }
