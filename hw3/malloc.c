@@ -7,13 +7,14 @@
 #define PAGESIZE sysconf(_SC_PAGESIZE)
 
 struct MemoryNodeHeader {
-        size_t blockSize;
+        unsigned int blockSize;
+        unsigned int dataSize;
         struct MemoryNodeHeader *parent;
         struct MemoryNodeHeader *leftChild;
         struct MemoryNodeHeader *rightChild;
-        int isNotFree;
+        unsigned int isNotFree;
         // used as padding bytes for data allignment
-        int paddingBytes;
+        unsigned int paddingBytes;
         struct MemoryNodeHeader* nextRoot;
 } *head;
 
@@ -38,18 +39,23 @@ size_t getPageSize(size_t requiredSize) {
         return pageSize;
 }
 
-int getLeftNodeSize(size_t nodeSize){
-        return nodeSize - 2*sizeof(struct MemoryNodeHeader);
+unsigned int getLeftNodeSize(struct MemoryNodeHeader* node){
+        // Left node data size is equal to datasize - size of split
+        // block - header for the node
+        unsigned int splitSize = (node->blockSize)/2;
+        unsigned int dataSize = node->dataSize - splitSize - sizeof(
+                struct MemoryNodeHeader);
+        return dataSize;
 }
 
-int getRightNodeSize(size_t nodeSize){
-        return nodeSize - sizeof(struct MemoryNodeHeader);
+unsigned int getRightNodeSize(struct MemoryNodeHeader* node){
+        unsigned int splitSize = (node->blockSize)/2;
+        return splitSize - sizeof(struct MemoryNodeHeader);
 }
 
 int canGoDown(struct MemoryNodeHeader* node, int requiredSize) {
-        size_t newSize = (node->blockSize)/2;
-        int leftNodeSize = getLeftNodeSize(newSize);
-        int rightNodeSize = getRightNodeSize(newSize);
+        int leftNodeSize = getLeftNodeSize(node);
+        int rightNodeSize = getRightNodeSize(node);
         return (leftNodeSize > 0 && rightNodeSize > 0) &&
                (leftNodeSize >= requiredSize || rightNodeSize >= requiredSize);
 }
@@ -60,9 +66,9 @@ int canBeSplit(struct MemoryNodeHeader* node, int requiredSize) {
 
 int getNodeSize(struct MemoryNodeHeader* node){
         if(node->parent->leftChild == node) {
-                return getLeftNodeSize(node->blockSize);
+                return getLeftNodeSize(node->parent);
         }else{
-                return getRightNodeSize(node->blockSize);
+                return getRightNodeSize(node->parent);
         }
 }
 
@@ -71,11 +77,13 @@ void splitHelper(struct MemoryNodeHeader* node) {
         node->leftChild = node + 1;
         node->leftChild->parent = node;
         node->leftChild->blockSize = newSize;
+        node->leftChild->dataSize = getLeftNodeSize(node);
         node->leftChild->isNotFree = 0;
         node->leftChild->paddingBytes = 0;
         node->rightChild = (void *) node + newSize;
         node->rightChild->parent = node;
         node->rightChild->blockSize = newSize;
+        node->rightChild->dataSize = getRightNodeSize(node);
         node->rightChild->isNotFree = 0;
         node->rightChild->paddingBytes = 0;
         node->isNotFree = 1;
@@ -123,6 +131,7 @@ void createMemoryTree(size_t requiredSize) {
         sbrk(pageSize);
 
         root->blockSize = pageSize;
+        root->dataSize = pageSize - sizeof(struct MemoryNodeHeader);
         root->isNotFree = 0;
         root->paddingBytes = 0;
         root->parent = NULL;
@@ -220,15 +229,7 @@ void* realloc(void* ptr, size_t size){
                 // copies data from old to new location
                 // frees the old location
                 struct MemoryNodeHeader* node = (struct MemoryNodeHeader*)ptr - 1;
-                size_t dataSize = 0;
-                if(node->parent->leftChild == node) {
-                        // this is left child
-                        dataSize = node->blockSize - 2*sizeof(struct MemoryNodeHeader);
-                }else{
-                        // this is right child
-                        dataSize = node->blockSize - sizeof(struct MemoryNodeHeader);
-                }
-                void *newPtr = memcpy(allocateMemory(size), ptr, dataSize);
+                void *newPtr = memcpy(allocateMemory(size), ptr, node->dataSize);
                 free(ptr);
                 return newPtr;
         }
