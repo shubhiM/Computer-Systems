@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <sched.h>
 #define PAGESIZE sysconf(_SC_PAGESIZE)
-int a[1048576];
+int a[1048576000];
 
 void initialize(int a[], int size){
         for(int i=0; i<size; i++) {
@@ -22,9 +22,10 @@ double getTimeToAccessIthElement(int index){
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
         unsigned long start_time = 1000000000*start.tv_sec + start.tv_nsec;
         unsigned long end_time = 1000000000*end.tv_sec + end.tv_nsec;
-        printf("Access time for %d element of array %lf\n",
-               index, (double)(end_time - start_time));
-        return (double) (end_time - start_time);
+        double diff = (end_time - start_time);
+        printf("%d Access time for %d element of array %lf\n",
+               index/8192,index, diff);
+        return diff;
 }
 
 void specCacheLineSize(){
@@ -60,19 +61,15 @@ void specCacheSize(int trials, int pages){
         unsigned long end_time = 1000000000*end.tv_sec + end.tv_nsec;
         unsigned long diff = end_time - start_time;
         total+=diff;
-        printf("Average access time(nsec)/page %lf for reading %d pages over %d trials\n",
+        printf("Average access time(nsec)/page %lf for reading \
+            %d pages over %d trials\n",
                total/(denom), pages, trials);
 }
 
 
 void specAssociativity(){
-
-        // Cache full
-        for(int i=0; i<8192*2; i++) {
-                a[i]+=1;
-        }
-
-        for(int i=0; i<=8192*16; i=i+8192) {
+        for(int i=0; i<=8192*50; i=i+8192) {
+                printf("Iter %d\n", i/8192);
                 getTimeToAccessIthElement(i);
                 printf("******************************************\n");
                 for(int j=0; j<=i; j=j+8192) {
@@ -84,8 +81,8 @@ void specAssociativity(){
 
 void runCacheSizeSpec(){
         initialize(a, 1048576);
-        for(int i=2; i<=1024; ) {
-                specCacheSize(100000000, i);
+        for(int i=2; i<=4096; ) {
+                specCacheSize(1000000, i);
                 i = i*2;
         }
 }
@@ -97,8 +94,11 @@ int main(int argc, char const *argv[]) {
                 printf("CPU affinity could not be set");
                 exit(1);
         }
+        // cache estimation spec
         runCacheSizeSpec();
+        // cache line estimation
         specCacheLineSize();
-        //specAssociativity();
+        // Associativity estimation
+        specAssociativity();
 
 }
