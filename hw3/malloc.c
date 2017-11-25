@@ -4,7 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <pthread.h>
 #define PAGESIZE sysconf(_SC_PAGESIZE)
+
+// Mutex lock to manage the process heap data structure
+pthread_mutex_t mutex;
 
 struct MemoryNodeHeader {
         unsigned int blockSize;
@@ -16,11 +20,21 @@ struct MemoryNodeHeader {
         // used as padding bytes for data allignment
         unsigned int paddingBytes;
         struct MemoryNodeHeader* nextRoot;
-} *head;
+};
+
+// Each thread has an arena from which it allocates the memory
+// head points to the arena
+__thread struct MemoryNodeHeader *head = NULL;
+
+// Each thread keeps a minNode which is the most suitable node
+// to fulfill memory request
+__thread struct MemoryNodeHeader* minNode = NULL;
+
+// Each thread keeps a freeNode which is the first most suitable
+// free node in the thread arean
+__thread struct MemoryNodeHeader* freeNode = NULL;
 
 
-struct MemoryNodeHeader* minNode = NULL;
-struct MemoryNodeHeader* freeNode = NULL;
 
 
 /******************************************************************************/
@@ -124,11 +138,15 @@ void getFreeNode(struct MemoryNodeHeader* node, size_t requiredSize) {
 }
 
 void createMemoryTree(size_t requiredSize) {
+
+        // TODO: Only one thread should do sbrk at a time
+        // This is done to avoid concurrency issues.
+        pthread_mutex_lock(&mutex);
         struct MemoryNodeHeader* root = sbrk(0);
         // page size required to fulfill the memory request
         size_t pageSize = getPageSize(requiredSize);
-
         sbrk(pageSize);
+        pthread_mutex_unlock(&mutex);
 
         root->blockSize = pageSize;
         root->dataSize = pageSize - sizeof(struct MemoryNodeHeader);
