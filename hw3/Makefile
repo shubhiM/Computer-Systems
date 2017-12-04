@@ -1,14 +1,18 @@
 #Sample Makefile for Malloc
 CC=gcc
-CFLAGS=-g -O0 -fPIC
+CFLAGS=-g -O0 -fPIC -fno-builtin
+CFLAGS_AFT=-lm -lpthread
 
-all:	check
+all: check
 
 clean:
-	rm -rf libmalloc.so malloc.o
+	rm -rf libmalloc.so malloc.o free.o calloc.o realloc.o
 
-libmalloc.so: malloc.o
-	$(CC) $(CFLAGS) -shared -Wl,--unresolved-symbols=ignore-all $< -o $@
+# final.o: common.o malloc.o free.o calloc.o realloc.o
+# 	ld -r common.o malloc.o free.o calloc.o realloc.o final.o
+
+libmalloc.so: malloc.o free.o calloc.o realloc.o
+	$(CC) $(CFLAGS) -shared -Wl $^ -o $@
 
 test: test.o
 	$(CC) $(CFLAGS) $< -o $@
