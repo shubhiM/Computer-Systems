@@ -1,3 +1,8 @@
+Compute exponential function using a master-worker architecture:
+
+Please refer to the following link for detailed description:
+http://www.ccs.neu.edu/home/kapil/courses/cs5600sp17/hw2.html
+
 MAKEFILE commands:
 
 Steps to run the master worker project.
