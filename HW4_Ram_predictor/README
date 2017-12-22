@@ -1,5 +1,9 @@
 RAM Prediction
 
+Please refer to the following link for details:
+http://www.ccs.neu.edu/home/kapil/courses/cs5600f17/hw4.html
+
+
 RAM predictor has been implemented by using the following approach.
 
 Data structure:
