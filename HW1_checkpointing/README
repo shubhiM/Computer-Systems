@@ -1,5 +1,10 @@
-Building the project
 
+Checkpointing:
+
+Please refer to the following link for detailed description
+http://www.ccs.neu.edu/home/kapil/courses/cs5600sp17/hw1.html
+
+Steps to Build the project
 1. make clean
 2. make check
 3. make res
